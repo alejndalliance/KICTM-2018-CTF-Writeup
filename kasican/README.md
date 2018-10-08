@@ -10,7 +10,7 @@
 
 ### Write-up
 
-This binary not supposed to release on that that, its for student category, but i will put the writeup here too because we have the file
+This binary not supposed to release on that day, its for student category, but i will put the writeup here too because we have the file
 
 this binary should be straight forward. its actually xor encryption.
 
