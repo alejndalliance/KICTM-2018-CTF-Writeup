@@ -15,7 +15,7 @@
 This binary actually identical to kasican.exe which is xor encryption but its just have a little obfuscation and compiled as 64bit PE.
 because im lazy, i just load it in the debuggger find the part that have so many call and breakpoint at the flag check.
 
-![img](flag.PNG)
+![img](flag.png)
 
 for reference
 
