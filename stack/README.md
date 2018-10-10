@@ -21,24 +21,24 @@ socat TCP-LISTEN:12345,reuseaddr,fork EXEC:"./exploit"
 
 analyzing the binary in IDA/HexRays showed that `sub_8048B01()` vulnerable to stack buffer overflow, whereby the local variable `v1` that is populated in `sub_80489F4()` is using unsecure `scanf` function (wild guess based on the parameter passed)
 
-![img](img/2018-10-10_04-52.png)
-![img](img/2018-10-10_04-51.png)
+![img](img/2018-10-10_15-35.png)
+![img](img/2018-10-10_15-37.png)
 
 further analysis on the binary reveals that the `NX` flag was enabled which renders shellcode (`ret2stack`) attack useless. furthermore, the fact that the binary is a stripped static binary makes `ret2libc` attack impossible since we cannot find on libc functions. Thus we can only rely on ropchain attack to execute `/bin/sh` through a system call.
 
-![img](img/2018-10-10_05-12.png)
+![img](img/2018-10-10_15-39.png)
 
 #### padding calculation
 
 to execute a ropchain attack, we need to overwrite the `saved eip` with our rop gadgets. in order to do that, we need to figure out the exact number of bytes we need to pad from the buffer to the `saved eip`. from the first screenshot, we can see that variable `v1` is `38 (0x26)` bytes away from `ebp`. and since saved eip is located `4` bytes on top of `ebp`, we can deduce that we need to pad `42 (38+4)` bytes of the buffer to reach the `saved eip`. this can be confirmed by providing overflowing cyclic pattern to the buffer and calculating the offset of the value in `eip` at the `SIGSEGV` stop.
 
-![img](img/2018-10-10_05-32.png)
+![img](img/2018-10-10_15-42.png)
 
 #### linux x86 syscall
 
 now before we move on to the rop chain generation, we need to understand how to make an `execve` system call. basically, we need to call the relevant interrupt (`int 80h`) to make a system call. the `eax` register will hold the system call number and `ebx`,`ecx`,`edx`,`esi`,`edi` and `ebp` will hold the parameters respectively. you can read about it in depth [HERE](https://0xax.gitbooks.io/linux-insides/content/SysCall/linux-syscall-2.html).
 
-![img](img/2018-10-10_05-59.png)
+![img](img/2018-10-10_15-43.png)
 
 the system call number for `execve` is `0xb (11)`. based on the above manual,  parameter 1 (`ebx`) will hold the address to the filename to be executed, parameter 2 (`ecx`) will hold the array to the arguments and parameter 3 (`edx`) will hold the array to the environement variables. in our case `ebx` will point to `/bin/sh` address while `ecx` and `edx` will point to null address since we dont need any arguments nor environment variables.
 
@@ -46,7 +46,7 @@ the system call number for `execve` is `0xb (11)`. based on the above manual,  p
 
 first we need to point `ebx` to `/bin/sh` string. the binary provided does not contain the string needed, thus we need to manually insert it into the binary memory. and since we does not know wether the server enables `aslr` or not, we will also avoid writing the string on the stack. we can find writable memory address using `vmmap` command in gdb
 
-![img](img/2018-10-10_06-28.png)
+![img](img/2018-10-10_15-45.png)
 
 i had chose to write the string in the heap section as it already populated with null characters which save me the trouble of null truncating the string.
 
@@ -54,12 +54,12 @@ i had chose to write the string in the heap section as it already populated with
 
 now that we have a writable address, we need to find/chain write-what-where gadget(s) in order to write data to it. finding the gadgets manually was a cumbersome process, so i had use `ropper` to semi-automate the chain generation. note that the data was read using `scanf` into the buffer, so we need to declare a few "bad bytes" (whitespace characters `0x9` - `0xd`) that will cause problem. the command are as follows
 
-![img](img/2018-10-10_14-58.png)
+![img](img/2018-10-10_15-46.png)
 
 now we need to find a way to control `edx` and `eax`. for `edx`, we can just find `pop edx` instruction to populate data into it. but for `eax` there are no reliable `pop eax` instruction in the binary, so i chose to use `lea eax, [edx]` instead
 
-![img](img/2018-10-10_15-05.png)
-![img](img/2018-10-10_15-07.png)
+![img](img/2018-10-10_15-47.png)
+![img](img/2018-10-10_15-48.png)
 
 repeat the same process to find other gadgets and prepare other registers needed for a `execve` system call. full exploit code:
 
@@ -126,4 +126,4 @@ r.sendline("3")
 r.interactive()
 ```
 
-![img](img/2018-10-10_15-24.png)
+![img](img/2018-10-10_15-49.png)
